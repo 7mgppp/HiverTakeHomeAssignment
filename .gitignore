@@ -1,0 +1,19 @@
+# API keys — never commit
+.env
+.env.*
+
+# Raw Kaggle dataset — too large for git (~500 MB)
+twcs.csv
+
+# Full cleaned pair file — gitignored if large; only the sample is committed
+data/spotify_pairs_clean.csv
+
+# Python / IDE artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.idea/
+*.egg-info/
+dist/
+build/
+.DS_Store
