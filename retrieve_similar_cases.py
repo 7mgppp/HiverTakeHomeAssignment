@@ -7,7 +7,12 @@ Public API
 
     cases = retrieve_similar_cases("My Spotify keeps crashing on shuffle", k=3)
     # [
-    #   {"customer_text": "...", "brand_text": "...", "score": 0.92},
+    #   {
+    #     "customer_text":  "...",
+    #     "brand_text":     "...",
+    #     "score":          0.92,
+    #     "is_deflection":  False,
+    #   },
     #   ...
     # ]
 
@@ -21,8 +26,16 @@ Design
   data/spotify_faiss.index so the 33 k-pair encoding (≈20 s on CPU) only runs once.
 - Everything is lazy-initialised: the first call to retrieve_similar_cases() triggers
   the build; subsequent calls within the same process are instant.
-- The index excludes the query itself from results (not needed here since queries are
-  new messages, not from the dataset, but the deduplication guard is free).
+
+Post-FAISS filtering (applied after raw candidate retrieval):
+  1. Deduplication — if the same customer_text appears more than once (multi-turn
+     threads reconstructed into multiple pairs), only the highest-scoring copy is kept.
+  2. Deflection down-weighting — brand replies matching DM-deflection patterns (same
+     regex list as build_dataset.py Stage 1) receive a score penalty of DEFLECTION_PENALTY.
+     They are NOT removed entirely: if the top-k candidates are all deflections the caller
+     still gets results, but 'is_deflection=True' signals to Step 4 that grounding is thin.
+  To ensure k non-deflection results can be found when they exist, we fetch
+  OVERSAMPLE * k raw candidates from FAISS before applying the filters.
 
 Why local embeddings?
 - all-MiniLM-L6-v2 quality is well-suited to short tweet-length texts.
@@ -35,7 +48,7 @@ Files written to disk (gitignored):
 """
 
 import logging
-import os
+import re
 from pathlib import Path
 
 import faiss
@@ -56,6 +69,65 @@ FAISS_INDEX = DATA_DIR / "spotify_faiss.index"
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
+
+# How many raw FAISS candidates to fetch per k requested.
+# Gives the filter/dedup pipeline room to discard duplicates and deflections
+# while still returning k results.
+OVERSAMPLE = 8
+
+# Score multiplier applied to deflection replies.
+# 0.5 halves the cosine score, pushing them below any substantive reply
+# at similarity > 0.5× the deflection's raw score.
+DEFLECTION_PENALTY = 0.5
+
+# ---------------------------------------------------------------------------
+# DM-deflection detection — same patterns as build_dataset.py Stage 1
+# ---------------------------------------------------------------------------
+
+# Extended slightly vs. build_dataset.py to also catch patterns that survived
+# because they were combined with other text (e.g. "Let's carry on in DMs")
+_DEFLECTION_PATTERNS: list[re.Pattern] = [
+    re.compile(p, re.IGNORECASE) for p in [
+        # Core DM-mention patterns
+        r"\bdm us\b",
+        r"\bsend us a dm\b",
+        r"\bshoot us a dm\b",
+        r"\bdirect message\b",
+        r"\bfollow.*\bdm\b",
+        r"\bplease dm\b",
+        r"\bcheck your dms?\b",
+        r"\bslide into our dms\b",
+        # "sent a/you a DM" variants (word order varies)
+        r"\bsent (you )?a dm\b",
+        r"\bsent a dm (your way|over|there)\b",
+        r"\bsent.*\bdm\b.{0,20}(your way|over|there)\b",
+        # "via DM" / "over DM" / "in a DM"
+        r"\b(via|over|in( a)?)\s+dms?\b",
+        # "responded to your DM" (with or without we've/we just)
+        r"\bresponded to your dm\b",
+        r"\breply(ing)? (to|via|in|over) (your )?dm\b",
+        r"\breplied.*\bdm\b",
+        # "chatting / helping / continuing there / backstage / in DMs"
+        r"\bchat(ting)? (there|backstage|in dms?)\b",
+        r"\bcarry on (chatting|helping( out)?)\b",
+        r"\bcontinue (chatting|helping|there)\b",
+        r"\bcontinuing (to help|chatting|there)\b",
+        r"\bhelp(ing)? out (there|backstage)\b",
+        r"\bcarry on (helping out|chatting) (there|backstage)\b",
+        # "let's carry on / continue there / backstage"
+        r"\blet'?s (carry on|continue|chat) (there|in|via).{0,20}dm\b",
+        r"\blet'?s (carry on|continue|chat) (there|backstage)\b",
+    ]
+]
+
+
+def is_deflection(text: str) -> bool:
+    """
+    True if the brand reply is primarily a 'DM us' / 'check your DMs' deflection.
+    Reuses + extends the Stage 1 filter from build_dataset.py.
+    """
+    return any(p.search(text) for p in _DEFLECTION_PATTERNS)
+
 
 # ---------------------------------------------------------------------------
 # Module-level singletons — built on first call, reused thereafter
@@ -91,7 +163,6 @@ def _build_or_load_index() -> tuple[pd.DataFrame, faiss.Index]:
         )
     logger.info("Loading pairs from %s …", PAIRS_CSV)
     df = pd.read_csv(PAIRS_CSV, dtype=str).fillna("")
-    # Normalise column names defensively
     df.columns = [c.strip() for c in df.columns]
     logger.info("Loaded %d pairs", len(df))
 
@@ -118,12 +189,10 @@ def _build_or_load_index() -> tuple[pd.DataFrame, faiss.Index]:
         )
         embeddings = embeddings.astype(np.float32)
 
-        # Save embeddings cache
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         np.save(str(EMBEDDINGS_NPY), embeddings)
         logger.info("Saved embeddings to %s", EMBEDDINGS_NPY)
 
-        # Build FAISS IndexFlatIP (exact cosine search after L2 normalisation)
         index = faiss.IndexFlatIP(EMBEDDING_DIM)
         index.add(embeddings)
         faiss.write_index(index, str(FAISS_INDEX))
@@ -142,6 +211,12 @@ def retrieve_similar_cases(customer_text: str, k: int = 3) -> list[dict]:
     """
     Find the k most similar resolved support cases to a customer message.
 
+    Post-FAISS processing:
+      - Deduplicates on customer_text (keeps highest-scoring copy).
+      - Down-weights DM-deflection brand replies by DEFLECTION_PENALTY so
+        substantive resolutions sort first.
+      - Returns up to k results; fewer if the corpus has no matches.
+
     Parameters
     ----------
     customer_text : str
@@ -154,7 +229,9 @@ def retrieve_similar_cases(customer_text: str, k: int = 3) -> list[dict]:
     list of dict, each with keys:
         customer_text : str   — historical customer message
         brand_text    : str   — SpotifyCares reply to that message
-        score         : float — cosine similarity [0, 1]; higher = more similar
+        score         : float — adjusted cosine similarity (after deflection penalty)
+        raw_score     : float — original cosine similarity from FAISS
+        is_deflection : bool  — True when brand_text is a DM-deflection reply
     """
     if not customer_text or not customer_text.strip():
         return []
@@ -169,21 +246,42 @@ def retrieve_similar_cases(customer_text: str, k: int = 3) -> list[dict]:
         convert_to_numpy=True,
     ).astype(np.float32)
 
-    # FAISS search — returns (scores, indices) each shape (1, k)
-    fetch_k = min(k + 1, index.ntotal)   # +1 in case query itself is in index
+    # Fetch OVERSAMPLE * k raw candidates — gives the filter pipeline room to work
+    fetch_k = min(k * OVERSAMPLE, index.ntotal)
     scores, indices = index.search(query_vec, fetch_k)
 
-    results = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0:          # FAISS returns -1 for padding when corpus < k
+    # -------------------------------------------------------------------------
+    # Post-processing: dedup → flag deflections → re-sort → take k
+    # -------------------------------------------------------------------------
+    seen_customer_texts: set[str] = set()
+    candidates: list[dict] = []
+
+    for raw_score, idx in zip(scores[0], indices[0]):
+        if idx < 0:
             continue
         row = df.iloc[idx]
-        results.append({
-            "customer_text": row["customer_text"],
-            "brand_text":    row["brand_text"],
-            "score":         float(score),
-        })
-        if len(results) >= k:
-            break
+        cust = row["customer_text"]
+        brand = row["brand_text"]
 
-    return results
+        # 1. Deduplicate by normalised customer_text (strip, lower, collapse whitespace)
+        cust_key = " ".join(cust.lower().split())
+        if cust_key in seen_customer_texts:
+            continue
+        seen_customer_texts.add(cust_key)
+
+        # 2. Flag and penalise deflection replies
+        defl = is_deflection(brand)
+        adjusted_score = float(raw_score) * (DEFLECTION_PENALTY if defl else 1.0)
+
+        candidates.append({
+            "customer_text": cust,
+            "brand_text":    brand,
+            "score":         round(adjusted_score, 4),
+            "raw_score":     round(float(raw_score), 4),
+            "is_deflection": defl,
+        })
+
+    # 3. Re-sort by adjusted score descending, then take top k
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    return candidates[:k]
+
