@@ -75,4 +75,11 @@ Chose to bias escalation rules toward safety after golden-set eval showed 18.1% 
 ### Limitation: Lack of Fact-Verification on Numeric Claims
 Row 131 revealed the reply-drafting pipeline has no fact-verification step for specific numeric claims (e.g. download limits). Draft stated precise numbers with high confidence with no grounding source for them — a real risk if a customer acts on an incorrect figure. Worth flagging as a limitation in the failure analysis section.
 
+### Systematic Divergence: LLM-as-a-Judge vs. Human Evaluator
+Analysis of the 30-row validation sample revealed two systematic patterns where the LLM judge and human ratings diverge:
+1. **Scope Blindness (Over-rewarding off-scope fluency)**: The judge has no domain boundary for "what is out-of-scope for a consumer support agent" (e.g., ID 147 job inquiry scored 4 by Judge vs. 2 by Human). The judge rewards a plausible, friendly deflection even when the bot should not have attempted to handle the query at all.
+2. **Actionability Asymmetry (Over-penalizing safe generality)**: The judge penalizes safe-but-generic responses much more harshly than human raters when the underlying issue is urgent or emotionally charged (e.g., ID 70 hacked email, ID 125 refund complaint). The judge demands concrete diagnostic next steps or direct resolution rather than accepting a polite holding reply.
+3. **Net Evaluation Bias**: Consequently, LLM judge scores tend to understate quality on cautious, generic-but-safe replies and overstate quality on out-of-scope but fluent replies.
+
+
 
