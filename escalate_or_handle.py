@@ -65,9 +65,65 @@ ANGER_URGENCY_PATTERNS = [
     (r"\b(urgent|immediately|asap|right now|emergency)\b", "Customer indicated high urgency."),
 ]
 
+# Churn & cancellation threat patterns (escalate regardless of intent)
+CHURN_THREAT_PATTERNS = [
+    (r"\b(going|about|have|might|may|ready|decided)\s+(to\s+|just\s+|have\s+to\s+)*(cancel|unsubscribe|leave|quit)\b",
+     "Customer expressed intent or threat to cancel subscription/account."),
+    (r"\bcancel\s+(my\s+|the\s+|this\s+|your\s+)?(subscription|account|premium|service|membership|app|everything)\b",
+     "Customer mentioned canceling account or subscription."),
+    (r"\bunsubscrib(e|ing)\b",
+     "Customer mentioned unsubscribing from service."),
+    (r"\bswitch(ing)?\s+(to|over\s+to)\s+(apple(\s+music)?|google(\s+music|\s+play)?|amazon(\s+music)?|tidal|deezer|pandora|youtube(\s+music)?|competitor|@\d+)\b",
+     "Customer mentioned switching to a competing service."),
+    (r"\bwhich\s+(one\s+)?(of\s+y['’]all\s+)?should\s+i\s+switch\s+to\b",
+     "Customer solicited competitor recommendations."),
+    (r"\bcancel\s+that\b",
+     "Customer requested to cancel transaction/request."),
+]
+
+# Security breach, account takeover, and data privacy patterns (escalate regardless of intent)
+SECURITY_BREACH_PATTERNS = [
+    (r"\b(hack(ed|ing|er)?|compromised?|breach(ed)?)\b",
+     "Customer reported account security breach or unauthorized access."),
+    (r"\b(stolen|theft|fraudulent\s+access|credit\s+theft)\b",
+     "Customer reported theft or fraudulent account activity."),
+    (r"\bpersonal\s+information\s+(is\s+)?(in\s+danger|compromised|exposed|leaked)\b",
+     "Customer expressed concern regarding personal data security."),
+    (r"\bsomeone\s+(else\s+)?is\s+accessing\s+(my|our)\b",
+     "Customer reported unauthorized third-party accessing their account."),
+    (r"\bunauthorized\s+(access|charge|activity|login)\b",
+     "Customer reported unauthorized account activity."),
+]
+
 _COMPILED_ANGER_PATTERNS = [
     (re.compile(pat, re.IGNORECASE), reason) for pat, reason in ANGER_URGENCY_PATTERNS
 ]
+_COMPILED_CHURN_PATTERNS = [
+    (re.compile(pat, re.IGNORECASE), reason) for pat, reason in CHURN_THREAT_PATTERNS
+]
+_COMPILED_SECURITY_PATTERNS = [
+    (re.compile(pat, re.IGNORECASE), reason) for pat, reason in SECURITY_BREACH_PATTERNS
+]
+
+
+def _detect_churn_threat(text: str) -> str | None:
+    """True if message contains explicit churn, cancellation, or competitor switching threats."""
+    if not text:
+        return None
+    for pattern, reason in _COMPILED_CHURN_PATTERNS:
+        if pattern.search(text):
+            return reason
+    return None
+
+
+def _detect_security_breach(text: str) -> str | None:
+    """True if message reports hacking, security breaches, stolen credentials, or exposed private data."""
+    if not text:
+        return None
+    for pattern, reason in _COMPILED_SECURITY_PATTERNS:
+        if pattern.search(text):
+            return reason
+    return None
 
 
 def _detect_anger_urgency(text: str) -> str | None:
@@ -135,7 +191,23 @@ def decide_escalation(
             "reason": SENSITIVE_INTENTS[norm_intent],
         }
 
-    # Rule (b): Weak retrieval grounding
+    # Rule (b): Security breach / account takeover / compromised data (regardless of intent)
+    security_reason = _detect_security_breach(text)
+    if security_reason:
+        return {
+            "decision": "escalate",
+            "reason": security_reason,
+        }
+
+    # Rule (c): Churn threat / competitor switching / cancellation intent (regardless of intent)
+    churn_reason = _detect_churn_threat(text)
+    if churn_reason:
+        return {
+            "decision": "escalate",
+            "reason": churn_reason,
+        }
+
+    # Rule (d): Weak retrieval grounding
     if norm_quality == "weak":
         return {
             "decision": "escalate",
@@ -145,7 +217,7 @@ def decide_escalation(
             ),
         }
 
-    # Rule (c): Anger / urgency / sentiment signals
+    # Rule (e): Anger / urgency / sentiment signals
     anger_reason = _detect_anger_urgency(text)
     if anger_reason:
         return {
@@ -153,14 +225,14 @@ def decide_escalation(
             "reason": anger_reason,
         }
 
-    # Rule (d): Uncategorized intent
+    # Rule (f): Uncategorized intent
     if norm_intent == "other_uncategorized":
         return {
             "decision": "escalate",
             "reason": "Intent could not be categorized into known support workflows; routing to human agent.",
         }
 
-    # Rule (e): Safe for automated response
+    # Rule (g): Safe for automated response
     return {
         "decision": "auto_handle",
         "reason": f"Standard {norm_intent.replace('_', ' ')} inquiry with adequate grounding ({norm_quality}).",
