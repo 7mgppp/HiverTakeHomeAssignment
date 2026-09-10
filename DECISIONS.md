@@ -68,3 +68,11 @@ https://docs.anthropic.com/en/docs/about-claude/models/all-models — checked 20
 
 Chose to bias escalation rules toward safety after golden-set eval showed 18.1% false-auto-handle rate (customers with real churn/security risk being auto-handled). Added churn-threat and security-breach keyword rules — this eliminated all false auto-handles (0%) but increased false-escalation rate from ~1% to 21.8% (precision dropped 0.983→0.809). Accepted this tradeoff: in a support context, an unnecessary escalation costs a few minutes of human agent time, while a missed escalation on a real churn/security risk could cost a customer relationship or enable real harm. Also note: intent accuracy showed minor variance between live eval runs (97.3%→96.0%) despite no changes to the classification logic — likely LLM non-determinism rather than a real regression, worth a second run to confirm before final report.
 
+---
+
+## Step 7: LLM-as-a-Judge Validation & Failure Analysis
+
+### Limitation: Lack of Fact-Verification on Numeric Claims
+Row 131 revealed the reply-drafting pipeline has no fact-verification step for specific numeric claims (e.g. download limits). Draft stated precise numbers with high confidence with no grounding source for them — a real risk if a customer acts on an incorrect figure. Worth flagging as a limitation in the failure analysis section.
+
+
