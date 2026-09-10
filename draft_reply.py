@@ -149,17 +149,22 @@ def _build_prompt(
     # Grounding instruction varies by quality
     if quality == "strong":
         grounding_instruction = (
-            "The retrieved examples are closely matched and substantive. "
-            "Closely follow the tone, structure, and approach shown — "
-            "ask the same kinds of clarifying questions, use the same warm style, "
-            "and reflect the actual resolution pattern."
+            "The retrieved examples are closely matched and highly relevant. "
+            "USE THE ANSWER THE EXAMPLES GIVE — do not ask a clarifying question "
+            "if the examples provide a direct answer. "
+            "Mirror the tone and phrasing closely. "
+            "If the examples give a specific factual answer (e.g. content not available, "
+            "a troubleshooting step, a subscription detail), repeat that answer — "
+            "it is grounded in real resolved cases and you are not fabricating it."
         )
     elif quality == "moderate":
         grounding_instruction = (
             "The retrieved examples are moderately relevant. "
-            "Use them as loose style guidance but do not copy specifics that "
-            "may not apply. If uncertain, ask a clarifying question rather than "
-            "asserting something that may be wrong."
+            "Use them as loose style and structure guidance. "
+            "If the examples suggest a next step (e.g. asking for account details "
+            "or device info), follow that pattern. "
+            "Do not assert specific facts from the examples if they may not apply "
+            "to this exact situation."
         )
     else:  # weak
         grounding_instruction = (
@@ -192,7 +197,10 @@ Rules — follow all of them exactly:
    or the content.
 4. Do NOT include agent initials suffixes (e.g. "/NG", "/CB") — these are internal codes.
 5. Do NOT fabricate links, URLs, or t.co shortlinks.
-6. Do NOT make promises you cannot keep (e.g. "we'll fix this today", refund guarantees).
+6. Do NOT invent specific facts (dates, prices, account details, content availability)
+   that are NOT present in the retrieved examples. However, if the retrieved examples
+   unanimously give a specific factual answer, you MUST use that answer — hedging or
+   asking a clarifying question when a clear grounded answer exists is wrong.
 7. If grounding quality is "weak" or examples are flagged [deflection]/[fragment]:
    acknowledge the issue warmly + ask one focused clarifying question.
    Do NOT invent specific diagnostic steps or resolution details.
