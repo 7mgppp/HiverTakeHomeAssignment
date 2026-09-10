@@ -52,3 +52,19 @@ classification task with few-shot prompting.
 
 **Model string confirmation source:**
 https://docs.anthropic.com/en/docs/about-claude/models/all-models — checked 2026-09-11.
+
+---
+
+## Steps 3 & 4: Retrieval & Grounded Drafting
+
+- **Local Embeddings**: Chose `sentence-transformers/all-MiniLM-L6-v2` + FAISS `IndexFlatIP` (L2 normalized) over calling an embedding API. Caches embeddings locally (`data/spotify_embeddings.npy` & `data/spotify_faiss.index`) to reduce query latency to <5ms and cost to $0.00.
+- **Grounding Quality Signal**: Formulated three tiers (`strong`, `moderate`, `weak`) based on cosine similarity and deflection/fragment filtering. Directs Claude Haiku to strictly commit to grounded facts when `strong`, and fallback to safe clarifying questions when `weak`.
+
+---
+
+## Steps 5 & 6: Escalation Decision & Golden-Set Evaluation
+
+### Decision: Safety-Biased Escalation Rules
+
+Chose to bias escalation rules toward safety after golden-set eval showed 18.1% false-auto-handle rate (customers with real churn/security risk being auto-handled). Added churn-threat and security-breach keyword rules — this eliminated all false auto-handles (0%) but increased false-escalation rate from ~1% to 21.8% (precision dropped 0.983→0.809). Accepted this tradeoff: in a support context, an unnecessary escalation costs a few minutes of human agent time, while a missed escalation on a real churn/security risk could cost a customer relationship or enable real harm. Also note: intent accuracy showed minor variance between live eval runs (97.3%→96.0%) despite no changes to the classification logic — likely LLM non-determinism rather than a real regression, worth a second run to confirm before final report.
+
