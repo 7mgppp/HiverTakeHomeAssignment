@@ -54,7 +54,7 @@ Evaluated on the 150-example hand-labeled golden dataset (`data/golden_set_label
 
 | System / Model | Intent Accuracy | Escalation Precision | Escalation Recall | False Auto-Handles (Safety Risk) | LLM Judge Score (1-5) |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **AI Agent Pipeline (Claude Haiku)** | **96.0%** | **70.6%** | **100.0%** | **0 (0.0%)** | **3.61 / 5.00** |
+| **AI Agent Pipeline (Claude Haiku)** | **96.7%** | **72.7%** | **100.0%** | **0 (0.0%)** | **3.61 / 5.00** |
 | **Simple Baseline (Keyword + 1-NN)** | 21.3% | 53.8% | 98.6% | 1 (1.4%) | 2.29 / 5.00 |
 | **Trivial Baseline (Majority/Canned)** | 23.3% | 0.0% | 0.0% | 72 (100.0%) | 1.49 / 5.00 |
 
