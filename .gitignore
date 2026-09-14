@@ -9,8 +9,10 @@ twcs.csv
 data/spotify_pairs_clean.csv
 
 # Generated retrieval artefacts — reproducible, not committed
-data/spotify_embeddings.npy
-data/spotify_faiss.index
+data/spotify_embeddings*.npy
+data/spotify_faiss*.index
+data/*.npy
+data/*.index
 
 # Python / IDE artifacts
 __pycache__/
