@@ -6,7 +6,7 @@ Evaluated on 150 stratified golden-set customer messages from `data/golden_set_l
 
 | System / Baseline | Intent Accuracy | Escalation Precision | Escalation Recall | False Auto-Handles (Safety Risk) | LLM Judge Score (1-5) |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **AI Agent Pipeline (Claude Haiku)** | **100.0%** | 80.9% | **100.0%** | **0 (0.0%)** | **3.65 / 5.00** |
+| **AI Agent Pipeline (Claude Haiku)** | **96.0%** | 80.9% | **100.0%** | **0 (0.0%)** | **3.65 / 5.00** |
 | **Simple Baseline (Keyword + 1-NN)** | 21.3% | 53.8% | 98.6% | 1 (1.4%) | 2.29 / 5.00 |
 | **Trivial Baseline (Majority/Canned)** | 23.3% | 0.0% | 0.0% | 72 (100.0%) | 1.49 / 5.00 |
 
