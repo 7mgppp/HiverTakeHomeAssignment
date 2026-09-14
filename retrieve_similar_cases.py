@@ -49,6 +49,7 @@ Files written to disk (gitignored):
 
 import logging
 import re
+import os
 from pathlib import Path
 
 import faiss
@@ -63,9 +64,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DATA_DIR = Path(__file__).parent / "data"
-PAIRS_CSV = DATA_DIR / "spotify_pairs_clean.csv"
-EMBEDDINGS_NPY = DATA_DIR / "spotify_embeddings.npy"
-FAISS_INDEX = DATA_DIR / "spotify_faiss.index"
+
+# Full index paths
+PAIRS_CSV_FULL = DATA_DIR / "spotify_pairs_clean.csv"
+EMBEDDINGS_NPY_FULL = DATA_DIR / "spotify_embeddings.npy"
+FAISS_INDEX_FULL = DATA_DIR / "spotify_faiss.index"
+
+# Held-out index paths (excludes golden-set source queries)
+PAIRS_CSV_HELDOUT = DATA_DIR / "spotify_pairs_heldout.csv"
+EMBEDDINGS_NPY_HELDOUT = DATA_DIR / "spotify_embeddings_heldout.npy"
+FAISS_INDEX_HELDOUT = DATA_DIR / "spotify_faiss_heldout.index"
+
+DEFAULT_INDEX_MODE = os.environ.get("FAISS_INDEX_MODE", "heldout").lower()
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
@@ -130,11 +140,10 @@ def is_deflection(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Module-level singletons — built on first call, reused thereafter
+# Module-level singletons & cache
 # ---------------------------------------------------------------------------
 
-_df: pd.DataFrame | None = None       # the full pairs dataframe
-_index: faiss.Index | None = None     # FAISS index
+_index_cache: dict[str, tuple[pd.DataFrame, faiss.Index]] = {}
 _model: SentenceTransformer | None = None  # embedding model
 
 
@@ -146,60 +155,59 @@ def _get_model() -> SentenceTransformer:
     return _model
 
 
-def _build_or_load_index() -> tuple[pd.DataFrame, faiss.Index]:
+def _build_or_load_index(mode: str = "heldout") -> tuple[pd.DataFrame, faiss.Index]:
     """
     Load the CSV, build embeddings (or load from cache), and return the
-    dataframe + FAISS index. Called at most once per process.
+    dataframe + FAISS index for the requested mode ('heldout' or 'full').
     """
-    global _df, _index
+    if mode in _index_cache:
+        return _index_cache[mode]
 
-    if _df is not None and _index is not None:
-        return _df, _index
+    if mode == "full":
+        pairs_csv = PAIRS_CSV_FULL
+        embeddings_npy = EMBEDDINGS_NPY_FULL
+        faiss_index_path = FAISS_INDEX_FULL
+    else:
+        pairs_csv = PAIRS_CSV_HELDOUT if PAIRS_CSV_HELDOUT.exists() else PAIRS_CSV_FULL
+        embeddings_npy = EMBEDDINGS_NPY_HELDOUT if EMBEDDINGS_NPY_HELDOUT.exists() else EMBEDDINGS_NPY_FULL
+        faiss_index_path = FAISS_INDEX_HELDOUT if FAISS_INDEX_HELDOUT.exists() else FAISS_INDEX_FULL
 
-    # 1. Load pairs CSV
-    if not PAIRS_CSV.exists():
-        raise FileNotFoundError(
-            f"{PAIRS_CSV} not found. Run build_dataset.py first."
-        )
-    logger.info("Loading pairs from %s …", PAIRS_CSV)
-    df = pd.read_csv(PAIRS_CSV, dtype=str).fillna("")
+    if not pairs_csv.exists():
+        raise FileNotFoundError(f"{pairs_csv} not found.")
+
+    logger.info("Loading pairs (%s mode) from %s …", mode, pairs_csv)
+    df = pd.read_csv(pairs_csv, dtype=str).fillna("")
     df.columns = [c.strip() for c in df.columns]
-    logger.info("Loaded %d pairs", len(df))
+    logger.info("Loaded %d pairs (%s mode)", len(df), mode)
 
     texts = df["customer_text"].tolist()
 
-    # 2. Load or compute embeddings
-    if EMBEDDINGS_NPY.exists() and FAISS_INDEX.exists():
-        logger.info("Loading cached embeddings from %s …", EMBEDDINGS_NPY)
-        embeddings = np.load(str(EMBEDDINGS_NPY))
-        logger.info("Loading cached FAISS index from %s …", FAISS_INDEX)
-        index = faiss.read_index(str(FAISS_INDEX))
+    if embeddings_npy.exists() and faiss_index_path.exists():
+        logger.info("Loading cached embeddings from %s …", embeddings_npy)
+        embeddings = np.load(str(embeddings_npy))
+        logger.info("Loading cached FAISS index from %s …", faiss_index_path)
+        index = faiss.read_index(str(faiss_index_path))
     else:
-        logger.info(
-            "Encoding %d texts with %s — this takes ~20 s on CPU and runs once …",
-            len(texts), MODEL_NAME,
-        )
+        logger.info("Encoding %d texts with %s (%s mode) …", len(texts), MODEL_NAME, mode)
         model = _get_model()
         embeddings = model.encode(
             texts,
             batch_size=256,
             show_progress_bar=True,
             convert_to_numpy=True,
-            normalize_embeddings=True,   # L2-normalise so IP == cosine similarity
-        )
-        embeddings = embeddings.astype(np.float32)
+            normalize_embeddings=True,
+        ).astype(np.float32)
 
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        np.save(str(EMBEDDINGS_NPY), embeddings)
-        logger.info("Saved embeddings to %s", EMBEDDINGS_NPY)
+        np.save(str(embeddings_npy), embeddings)
+        logger.info("Saved embeddings to %s", embeddings_npy)
 
         index = faiss.IndexFlatIP(EMBEDDING_DIM)
         index.add(embeddings)
-        faiss.write_index(index, str(FAISS_INDEX))
-        logger.info("Saved FAISS index to %s (%d vectors)", FAISS_INDEX, index.ntotal)
+        faiss.write_index(index, str(faiss_index_path))
+        logger.info("Saved FAISS index to %s (%d vectors)", faiss_index_path, index.ntotal)
 
-    _df = df
-    _index = index
+    _index_cache[mode] = (df, index)
     return df, index
 
 
@@ -207,7 +215,7 @@ def _build_or_load_index() -> tuple[pd.DataFrame, faiss.Index]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def retrieve_similar_cases(customer_text: str, k: int = 3) -> list[dict]:
+def retrieve_similar_cases(customer_text: str, k: int = 3, index_mode: str | None = None) -> list[dict]:
     """
     Find the k most similar resolved support cases to a customer message.
 
@@ -236,7 +244,8 @@ def retrieve_similar_cases(customer_text: str, k: int = 3) -> list[dict]:
     if not customer_text or not customer_text.strip():
         return []
 
-    df, index = _build_or_load_index()
+    mode = (index_mode or DEFAULT_INDEX_MODE).lower()
+    df, index = _build_or_load_index(mode)
 
     # Embed and normalise the query (model already cached after first call)
     model = _get_model()

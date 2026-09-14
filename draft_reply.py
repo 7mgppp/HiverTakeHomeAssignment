@@ -231,7 +231,7 @@ def _get_client() -> anthropic.Anthropic:
 # Public API
 # ---------------------------------------------------------------------------
 
-def draft_reply(customer_text: str, intent: str) -> dict:
+def draft_reply(customer_text: str, intent: str, index_mode: str | None = None) -> dict:
     """
     Draft a SpotifyCares reply to a customer tweet.
 
@@ -242,6 +242,8 @@ def draft_reply(customer_text: str, intent: str) -> dict:
     intent : str
         Intent label from classify_intent() (e.g. "playback_technical_issue").
         Used to inform the drafting prompt.
+    index_mode : str, optional
+        Index mode to use for retrieval ('heldout' or 'full'). Defaults to 'heldout'.
 
     Returns
     -------
@@ -258,7 +260,7 @@ def draft_reply(customer_text: str, intent: str) -> dict:
         }
 
     # Step 1 — retrieve
-    cases = retrieve_similar_cases(customer_text.strip(), k=3)
+    cases = retrieve_similar_cases(customer_text.strip(), k=3, index_mode=index_mode)
 
     # Step 2 — grounding quality
     quality = _compute_grounding_quality(cases)

@@ -81,5 +81,9 @@ Analysis of the 30-row validation sample revealed two systematic patterns where 
 2. **Actionability Asymmetry (Over-penalizing safe generality)**: The judge penalizes safe-but-generic responses much more harshly than human raters when the underlying issue is urgent or emotionally charged (e.g., ID 70 hacked email, ID 125 refund complaint). The judge demands concrete diagnostic next steps or direct resolution rather than accepting a polite holding reply.
 3. **Net Evaluation Bias**: Consequently, LLM judge scores tend to understate quality on cautious, generic-but-safe replies and overstate quality on out-of-scope but fluent replies.
 
+---
 
+## Step 8: Data Leakage Audit & Held-out Index Benchmark
 
+### Decision: Rebuilding Retrieval Index on Held-out Corpus
+Identified potential data leakage — golden-set queries were retrievable from the same corpus used for grounding. Rebuilt retrieval index excluding golden-set source tweets and re-ran full evaluation to get honest, leakage-free numbers. See before/after comparison in evaluation_report.md.
