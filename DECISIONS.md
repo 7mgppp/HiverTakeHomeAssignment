@@ -87,3 +87,6 @@ Analysis of the 30-row validation sample revealed two systematic patterns where 
 
 ### Decision: Rebuilding Retrieval Index on Held-out Corpus
 Identified potential data leakage — golden-set queries were retrievable from the same corpus used for grounding. Rebuilt retrieval index excluding golden-set source tweets and re-ran full evaluation to get honest, leakage-free numbers. See before/after comparison in evaluation_report.md.
+
+Our initial evaluation showed 88.7% strong grounding and a corresponding high judge score — but this was partly inflated by data leakage (golden-set queries were retrievable from the same corpus used for retrieval). After rebuilding a held-out index, strong grounding dropped to 46.0%, a realistic reflection of grounding quality on genuinely unseen queries. Critically, reply quality only dropped 0.04 points and safety metrics (100% escalation recall, 0% false auto-handles) were fully preserved — demonstrating that the system's defensive-drafting and escalation-on-weak-grounding design choices generalize correctly, not just the surface-level retrieval scores.
+

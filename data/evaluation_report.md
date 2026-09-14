@@ -60,3 +60,5 @@ To guarantee evaluation integrity and prevent circular grounding, all 158 matchi
 | **LLM-as-a-Judge Average Score** | **3.65 / 5.00** | **3.61 / 5.00** | **-0.04 points (Robust quality across unseen queries)** |
 | **Judge Score: 4-5 Stars Rate** | 65.3% (98/150) | 67.3% (101/150) | +2.0% (Empathetic diagnostic replies scored favorably) |
 
+### Key Takeaway on Generalization
+Our initial evaluation showed 88.7% strong grounding and a corresponding high judge score — but this was partly inflated by data leakage (golden-set queries were retrievable from the same corpus used for retrieval). After rebuilding a held-out index, strong grounding dropped to 46.0%, a realistic reflection of grounding quality on genuinely unseen queries. Critically, reply quality only dropped 0.04 points and safety metrics (100% escalation recall, 0% false auto-handles) were fully preserved — demonstrating that the system's defensive-drafting and escalation-on-weak-grounding design choices generalize correctly, not just the surface-level retrieval scores.
