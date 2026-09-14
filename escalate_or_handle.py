@@ -105,13 +105,22 @@ _COMPILED_SECURITY_PATTERNS = [
     (re.compile(pat, re.IGNORECASE), reason) for pat, reason in SECURITY_BREACH_PATTERNS
 ]
 
+# Negation patterns preceding churn-threat keywords (e.g. "don't want to unsubscribe", "no plans to cancel")
+_NEGATION_PREFIX_RE = re.compile(
+    r"\b(don['’]?t|do\s+not|does\s+not|doesn['’]?t|did\s+not|didn['’]?t|not|never|no\s+plans\s+to|no\s+intention\s+to|no\s+need\s+to|wouldn['’]?t|would\s+not|won['’]?t|will\s+not|hate\s+to|refuse\s+to|avoid|without)\s+(\w+\s+){0,4}$",
+    re.IGNORECASE,
+)
+
 
 def _detect_churn_threat(text: str) -> str | None:
-    """True if message contains explicit churn, cancellation, or competitor switching threats."""
+    """True if message contains explicit churn, cancellation, or competitor switching threats (unless negated)."""
     if not text:
         return None
     for pattern, reason in _COMPILED_CHURN_PATTERNS:
-        if pattern.search(text):
+        for match in pattern.finditer(text):
+            prefix = text[:match.start()]
+            if _NEGATION_PREFIX_RE.search(prefix.strip() + " "):
+                continue
             return reason
     return None
 

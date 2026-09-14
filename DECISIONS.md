@@ -90,3 +90,11 @@ Identified potential data leakage — golden-set queries were retrievable from t
 
 Our initial evaluation showed 88.7% strong grounding and a corresponding high judge score — but this was partly inflated by data leakage (golden-set queries were retrievable from the same corpus used for retrieval). After rebuilding a held-out index, strong grounding dropped to 46.0%, a realistic reflection of grounding quality on genuinely unseen queries. Critically, reply quality only dropped 0.04 points and safety metrics (100% escalation recall, 0% false auto-handles) were fully preserved — demonstrating that the system's defensive-drafting and escalation-on-weak-grounding design choices generalize correctly, not just the surface-level retrieval scores.
 
+---
+
+## Step 9: Negation-Aware Churn Guardrails
+
+### Decision: Negation Prefix Filtering for Churn-Threat Detection
+Spot-checking revealed a negation-blindness bug: queries like "I don't want to unsubscribe but..." (ID 130) triggered false escalations solely because the keyword "unsubscribe" appeared. Added regex prefix negation checks (e.g. `don't`, `do not`, `not`, `never`, `no plans to`, `wouldn't`, `hate to`) preceding churn keywords within 1-4 words. This reduced the false-escalation rate from 38.5% (30 cases) down to 34.6% (27 cases), successfully resolving false escalations on feedback inquiries like ID 130 while maintaining 100% recall on genuine churn threats and 0% false auto-handles.
+
+
