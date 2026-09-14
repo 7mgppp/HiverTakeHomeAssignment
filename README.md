@@ -64,28 +64,75 @@ Evaluated on the 150-example hand-labeled golden dataset (`data/golden_set_label
 
 ### Prerequisites
 - Python 3.10+
-- Anthropic API Key (in `.env`)
+- Anthropic API Key (in `.env`: `ANTHROPIC_API_KEY=sk-ant-...`)
 
 ### Installation
 ```bash
-git clone <repo-url>
-cd Hiver
+git clone https://github.com/7mgppp/HiverTakeHomeAssignment.git
+cd HiverTakeHomeAssignment
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt  # or install anthropic, faiss-cpu, sentence-transformers, pandas, numpy, python-dotenv
+pip install -r requirements.txt
 ```
 
-### Running Evaluation
+---
+
+## Data Setup
+
+1. **Download Kaggle Dataset**:
+   Download `twcs.csv` from the Kaggle [Customer Support on Twitter](https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter) dataset and place `twcs.csv` in the project root.
+
+2. **Clean & Build Dataset**:
+   Filter the raw tweets down to clean, non-deflection Spotify customer-brand pairs:
+   ```bash
+   python build_dataset.py
+   ```
+   *(Produces `data/spotify_pairs_clean.csv` and sample `data/spotify_pairs_sample.csv`)*
+
+3. **Build Held-Out Retrieval Index (Leakage-Free)**:
+   Generate the clean, held-out FAISS index excluding golden-set queries:
+   ```bash
+   python build_heldout_index.py
+   ```
+
+---
+
+## Single-Message Pipeline Execution
+
+Run the complete triage and response pipeline on any individual customer message:
+
 ```bash
-# Run full three-system benchmark
+# Process a single customer tweet
+python main.py "My Spotify keeps crashing whenever I try to shuffle a playlist"
+
+# Or run interactively
+python main.py
+```
+
+### Python SDK Usage
+```python
+from main import process_customer_message
+
+result = process_customer_message("I got charged twice for family plan this month!")
+print(result["intent"])        # "billing_subscription"
+print(result["decision"])      # "escalate"
+print(result["draft_reply"])   # "Hey! We'd be glad to look into this..."
+```
+
+---
+
+## Running Evaluation & Benchmarks
+
+```bash
+# 1. Run full three-system benchmark (AI Agent vs Simple vs Trivial)
 python eval.py
 
-# Run live golden set evaluation harness
+# 2. Run live golden set evaluation harness (Intent & Safety Escalation)
 python eval_harness.py --live
 
-# Run LLM-as-a-judge scoring
+# 3. Run LLM-as-a-judge scoring across golden-set drafts
 python judge_reply.py
 
-# Validate judge scores against human annotations
+# 4. Validate judge scores against 30 human ground-truth ratings
 python validate_judge.py --evaluate
 ```
