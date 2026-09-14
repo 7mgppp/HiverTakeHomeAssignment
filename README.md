@@ -123,6 +123,17 @@ print(result["draft_reply"])   # "Hey! We'd be glad to look into this..."
 
 ## Running Evaluation & Benchmarks
 
+> [!NOTE]
+> **Precomputed Evaluation Artifacts**:
+> All evaluation reports and scored datasets are already committed to the repository. Reviewers can inspect the complete results directly without needing an API key or running anything live:
+> - **[`data/evaluation_report.md`](data/evaluation_report.md)**: Detailed breakdown of intent accuracy (96.7%), confusion matrix, escalation safety metrics (100% recall, 0% false auto-handles), and the held-out index leakage audit.
+> - **[`data/golden_set_labeled.csv`](data/golden_set_labeled.csv)**: All 150 hand-annotated golden-set messages with human intent, escalation ground truth, and reasoning.
+> - **[`data/judge_scores.csv`](data/judge_scores.csv)**: All 150 generated draft replies with 1–5 LLM judge quality scores and 1-2 sentence rationales.
+> - **[`data/human_judge_sample.csv`](data/human_judge_sample.csv)**: 30-message blind human validation sample with agreement statistics ($\kappa = 0.3390$, 90.0% within $\pm 1$ pt).
+> - **[`data/baseline_comparison_report.md`](data/baseline_comparison_report.md)**: Side-by-side benchmark comparison of AI Agent vs. Simple Baseline vs. Trivial Baseline.
+
+If you wish to re-execute or verify the evaluation live:
+
 ```bash
 # 1. Run full three-system benchmark (AI Agent vs Simple vs Trivial)
 python eval.py
