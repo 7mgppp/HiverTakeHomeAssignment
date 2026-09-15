@@ -64,11 +64,11 @@ For SpotifyCares Twitter support, the system optimizes for three operational goa
 
 Evaluated on the 150-example hand-labeled golden dataset (`data/golden_set_labeled.csv`) against the independent held-out index:
 
-| System | Intent Accuracy | Escalation Precision | Escalation Recall | False Auto-Handles | LLM Judge Score |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **AI Agent Pipeline (Claude Haiku + FAISS RAG)** | **96.7%** | **72.7%** | **100.0%** | **0 (0.0%)** | **3.61 / 5.00** |
-| **Simple Baseline (Keyword + 1-NN Verbatim)** | 21.3% | 53.8% | 98.6% | 1 (1.4%) | 2.29 / 5.00 |
-| **Trivial Baseline (Majority Class + Canned)** | 23.3% | 0.0% | 0.0% | 72 (100.0%) | 1.49 / 5.00 |
+| System                                       | Intent Accuracy | Escalation Precision | Escalation Recall | False Auto-Handles | LLM Judge Score |
+| -------------------------------------------- | --------------: | -------------------: | ----------------: | -----------------: | --------------: |
+| AI Agent Pipeline (Claude Haiku + FAISS RAG) |           96.7% |                72.7% |            100.0% |           0 (0.0%) |     3.61 / 5.00 |
+| Simple Baseline (Keyword + 1-NN Verbatim)    |           21.3% |                53.8% |             98.6% |           1 (1.4%) |     2.29 / 5.00 |
+| Trivial Baseline (Majority Class + Canned)   |           23.3% |                 0.0% |              0.0% |        72 (100.0%) |     1.49 / 5.00 |
 
 ---
 
