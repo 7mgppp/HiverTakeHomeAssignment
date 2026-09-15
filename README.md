@@ -51,7 +51,7 @@ For SpotifyCares Twitter support, the system optimizes for three operational goa
 ```
 
 ### Core Pipeline Components
-1. **Data Pipeline (`build_dataset.py`)**: Filters 43,092 raw Spotify tweets down to 33,147 high-quality customer-brand interaction pairs, stripping DM deflections and non-English text.
+1. **Data Pipeline (`build_dataset.py`)**: Filters 43,092 raw Spotify tweets down to 33,154 high-quality customer-brand interaction pairs, stripping DM deflections and non-English text.
 2. **Intent Classification (`classify_intent.py`)**: Few-shot classification using Claude Haiku across 7 operational intents (`playback_technical_issue`, `account_login_access`, `billing_subscription`, `cancellation_refund`, `feature_content_question`, `general_complaint_feedback`, `other_uncategorized`).
 3. **Retrieval Engine (`retrieve_similar_cases.py`)**: Semantic search using `all-MiniLM-L6-v2` + FAISS `IndexFlatIP` with customer-text deduplication and DM-deflection down-weighting. Operates on a dedicated held-out index to eliminate evaluation leakage.
 4. **Escalation Engine (`escalate_or_handle.py`)**: Deterministic, safety-biased guardrails evaluating sensitive intents, account breach language, churn keywords (with negation-awareness), and weak retrieval signals.
@@ -107,10 +107,10 @@ The evaluation set consists of **150 hand-labeled examples** drawn from Spotify 
 
 Detailed trace of representative failure modes identified during evaluation:
 
-### 1. Semantic Overlap: Billing vs. Cancellation
-- **Query (ID 34)**: *"I cancelled my subscription last week, why was I charged again today?"*
-- **Observed Intent**: `billing_subscription` | **Expected Intent**: `cancellation_refund`
-- **Hypothesis**: The intent taxonomy contains semantic overlap between recurring charges and cancellation events. The model overweights the monetary charge token over the cancellation context.
+### 1. Semantic Overlap: Billing vs. Cancellation vs. Account Access
+- **Query (ID 70)**: *"@SpotifyCares I need to cancel my account but my email was hacked and i don't have access to it and I don't want to keep being charged."*
+- **Observed Intent**: `billing_subscription` | **Expected Intent**: `cancellation_refund` / `account_login_access`
+- **Hypothesis**: Multi-faceted support requests span overlapping domains (cancellation + hacking + billing charges). The model predicts a single top label based on financial keywords rather than detecting multi-intent structure.
 - **Proposed Fix**: Implement hierarchical intent classification separating the *account state* from the *requested action*.
 
 ### 2. Precise Numeric Hallucination Risk
@@ -151,7 +151,7 @@ Detailed trace of representative failure modes identified during evaluation:
 8. **Defensive Drafting Strategy**: Under weak or moderate grounding, prompts Claude to ask focused diagnostic questions rather than inventing facts.
 9. **Safety-Biased Escalation Policy**: Prioritized zero false auto-handles over raw automation rate, accepting a 34.6% false-escalation rate to protect customer relationships.
 10. **Negation-Aware Churn Matching**: Added prefix negation checks (`don't want to cancel`, `no plans to unsubscribe`) to prevent false alarms on feedback queries.
-11. **LLM-as-a-Judge with Blind Human Validation**: Scored drafts on a 1–5 scale and validated against 30 human ratings (90% within $\pm 1$ pt, $\kappa = 0.3390$).
+11. **LLM-as-a-Judge with Blind Human Validation**: Scored drafts on a 1–5 scale and validated against 30 human ratings (80.0% within $\pm 1$ pt, 50.0% exact match, $\kappa = 0.2537$, MAE = 0.77).
 12. **Three-System Benchmark**: Benchmarked against both a Trivial majority baseline and a Simple keyword/1-NN baseline to prove RAG pipeline lift.
 
 ---
